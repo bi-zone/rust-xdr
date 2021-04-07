@@ -21,7 +21,7 @@ doc = false
 [features]
 unstable = []
 derive_serde = ["serde"]
-omit_case_warnings = []
+reprc = []
 derive_json_schema = ["schemars"]
 derive_strum_enum_string = ["strum", "strum_macros"]
 

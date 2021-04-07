@@ -98,18 +98,6 @@ where
             .collect::<Result<Vec<_>>>()?
     };
 
-    #[allow(unused_mut)]
-    let mut imports = String::new();
-
-    #[cfg(feature="derive_serde")]
-    imports.push_str("use serde::{Serialize, Deserialize};\n");
-
-    #[cfg(feature="derive_json_schema")]
-    imports.push_str("use schemars::JsonSchema;\n");
-
-    #[cfg(feature="derive_strum_enum_string")]
-    imports.push_str("use strum_macros::EnumString;\n");
-
     let _ = writeln!(
         output,
         r#"
@@ -118,9 +106,8 @@ where
 // Generated from {} by xdrgen.
 //
 // DO NOT EDIT
-{}
 "#,
-        infile, imports
+        infile
     );
 
     for it in res {

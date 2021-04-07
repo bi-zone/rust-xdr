@@ -48,8 +48,8 @@ impl ToTokens for Derives {
 
         let mut tokens = toks.to_string();
 
-        #[cfg(feature="omit_case_warnings")]
-        tokens.push_str("#[allow(non_snake_case, non_camel_case_types)]");
+        #[cfg(feature="reprc")]
+        tokens.push_str("#[repr(C)]");
 
         let mut der = Vec::<&str>::new();
 
