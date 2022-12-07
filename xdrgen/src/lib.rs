@@ -36,14 +36,6 @@ type Result<T, E = xdr::Error> = std::result::Result<T, E>;
 mod spec;
 use spec::{Emit, Emitpack, Symtab};
 
-fn result_option<T, E>(resopt: Result<Option<T>, E>) -> Option<Result<T, E>> {
-    match resopt {
-        Ok(None) => None,
-        Ok(Some(v)) => Some(Ok(v)),
-        Err(e) => Some(Err(e)),
-    }
-}
-
 pub fn exclude_definition_line(line: &str, exclude_defs: &[&str]) -> bool {
     exclude_defs.iter().fold(false, |acc, v| {
         acc || line.contains(&format!("const {}", v))
@@ -104,12 +96,12 @@ where
         let packers = xdr
             .typespecs()
             .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
-            .filter_map(|c| result_option(c.pack(&xdr)));
+            .filter_map(|c| c.pack(&xdr).transpose());
 
         let unpackers = xdr
             .typespecs()
             .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
-            .filter_map(|c| result_option(c.unpack(&xdr)));
+            .filter_map(|c| c.unpack(&xdr).transpose());
 
         consts
             .chain(typespecs)
@@ -192,11 +184,11 @@ pub fn generate_pretty(input: &str, header: &str, exclude_defs: &[&str]) -> Resu
 
     let packers = typespecs
         .iter()
-        .filter_map(|c| result_option(c.pack(&xdr)));
+        .filter_map(|c| c.pack(&xdr).transpose());
 
     let unpackers = typespecs
         .iter()
-        .filter_map(|c| result_option(c.unpack(&xdr)));
+        .filter_map(|c| c.unpack(&xdr).transpose());
 
     let stream = consts
             .chain(typedefines)
