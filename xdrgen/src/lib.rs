@@ -30,14 +30,13 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::result;
 
-use xdr::Result;
+type Result<T, E = xdr::Error> = std::result::Result<T, E>;
 
 mod spec;
 use spec::{Emit, Emitpack, Symtab};
 
-fn result_option<T, E>(resopt: result::Result<Option<T>, E>) -> Option<result::Result<T, E>> {
+fn result_option<T, E>(resopt: Result<Option<T>, E>) -> Option<Result<T, E>> {
     match resopt {
         Ok(None) => None,
         Ok(Some(v)) => Some(Ok(v)),
@@ -140,6 +139,78 @@ where
     }
 
     Ok(())
+}
+
+/// Generate pretty Rust code from an RFC4506 XDR specification
+///
+/// `input` is a string with XDR specification
+/// `header` is Rust code to prepend before generated output
+#[cfg(feature = "pretty")]
+pub fn generate_pretty(input: &str, header: &str, exclude_defs: &[&str]) -> Result<String, anyhow::Error> {
+    use proc_macro2::TokenStream;
+
+    let mut file = syn::parse_file(header)?;
+
+    let xdr = match spec::specification(&input) {
+        Ok(defns) => Symtab::new(&defns),
+        Err(e) => anyhow::bail!(xdr::Error::from(format!("parse error: {}", e))),
+    };
+
+    fn filter_exlude<'a, V>(exclude_defs: &'a [&str]) -> impl 'a + FnMut(&(&String, V)) -> bool {
+        move |(name, _): &(&String, V),| {
+            !exclude_defs.contains(&name.as_str())
+        }
+    }
+    
+    let consts = xdr
+        .constants()
+        .filter(filter_exlude(exclude_defs))
+        .filter_map(|(c, &(v, ref scope))| {
+            if scope.is_none() {
+                Some(spec::Const(c.clone(), v))
+            } else {
+                None
+            }
+        })
+        .map(|c| c.define(&xdr));
+
+    let typespecs: Vec<_> = xdr
+        .typespecs()
+        .filter(filter_exlude(exclude_defs))
+        .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
+        .collect();
+    
+    let typedefines = typespecs
+        .iter()
+        .map(|c| c.define(&xdr));
+
+    let typesyns = xdr
+        .typesyns()
+        .filter(filter_exlude(exclude_defs))
+        .map(|(n, ty)| spec::Typesyn(n.clone(), ty.clone()))
+        .map(|c| c.define(&xdr));
+
+    let packers = typespecs
+        .iter()
+        .filter_map(|c| result_option(c.pack(&xdr)));
+
+    let unpackers = typespecs
+        .iter()
+        .filter_map(|c| result_option(c.unpack(&xdr)));
+
+    let stream = consts
+            .chain(typedefines)
+            .chain(typesyns)
+            .chain(packers)
+            .chain(unpackers)
+            .collect::<Result<TokenStream>>()?;
+
+    let body: syn::File = syn::parse2(stream)?;
+
+    file.attrs.append(&mut {body.attrs});
+    file.items.append(&mut {body.items});
+
+    Ok(prettyplease::unparse(&file))
 }
 
 /// Simplest possible way to generate Rust code from an XDR specification.
