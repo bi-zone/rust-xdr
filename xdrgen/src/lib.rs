@@ -199,8 +199,14 @@ pub fn generate_pretty(input: &str, header: &str, exclude_defs: &[&str]) -> Resu
 
     let body: syn::File = syn::parse2(stream)?;
 
+    // prettyplease treats this as newline
+    fn trailing_hardbreak(item: syn::Item) -> [syn::Item; 2] {
+        [item, syn::Item::Verbatim(TokenStream::new())]
+    }
+
     file.attrs.append(&mut {body.attrs});
-    file.items.append(&mut {body.items});
+    file.items.reserve(body.items.len() * 2);
+    file.items.extend(body.items.into_iter().map(trailing_hardbreak).flatten());
 
     Ok(prettyplease::unparse(&file))
 }
