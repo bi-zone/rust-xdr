@@ -203,12 +203,12 @@ where
 /// Specialized variant of `unpack_array` which initializes the element via a callback. This is primarily
 /// so that the array can be uninitialized, and we initialize it element at a time with `ptr::write()`.
 #[inline]
-pub fn unpack_array_with<In, T>(
+pub fn unpack_array_with<In, T, P>(
     input: &mut In,
-    array: &mut [T],
+    array: &mut [P],
     arraysz: usize,
-    set: fn (&mut T, T),
-    drop: fn(&mut T),
+    set: fn (&mut P, T),
+    drop: fn(&mut P),
     defl: Option<&T>,
 ) -> Result<usize>
 where

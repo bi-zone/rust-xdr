@@ -4,16 +4,17 @@ use std::io::Cursor;
 use xdr_codec::{unpack,pack};
 
 mod simple {
+    #![allow(dead_code)]
     use xdr_codec;
-    
-    #[allow(dead_code)]
     include!(concat!(env!("OUT_DIR"), "/simple_xdr.rs"));
 }
 
 fn main() {
+    let bar = simple::Bar { data: vec![1,2,3] };
     let foo = simple::Foo {
         a: 1, b: 2, c: 3,
-        bar: vec![simple::Bar { data: vec![1,2,3] }],
+        bar: vec![bar.clone()],
+        bar_pair: simple::BarPair([bar.clone(), bar.clone()]),
         barish: None,
         name: String::from("foox"),
         thing: simple::Things::C,

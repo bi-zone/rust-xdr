@@ -390,7 +390,7 @@ impl Type {
                 match ty {
                     &Opaque | &String => {
                         quote!({
-                            let mut buf: [u8; #value as usize] = unsafe { ::std::mem::MaybeUninit::uninit().assume_init() };
+                            let mut buf: [u8; #value as usize] = [0; #value as usize];
                             let sz = xdr_codec::unpack_opaque_array(input, &mut buf[..], #value as usize)?;
                             (buf, sz)
                         })
@@ -418,25 +418,23 @@ impl Type {
                         // it may leak, but that's better than calling Drop on uninitialized elements.
                         quote!({
                             #[inline]
-                            fn uninit_ptr_setter<T>(p: &mut T, v: T) {
-                                unsafe { ::std::ptr::write(p, v) }
+                            fn uninit_ptr_setter<T>(p: &mut ::std::mem::MaybeUninit<T>, v: T) {
+                                p.write(v);
                             }
                             #[inline]
-                            fn uninit_ptr_dropper<T>(p: &mut T) {
-                                unsafe { ::std::ptr::drop_in_place(p) }
+                            fn uninit_ptr_dropper<T>(p: &mut ::std::mem::MaybeUninit<T>) {
+                                unsafe { p.assume_init_drop(); }
                             }
-                            let mut buf: [#ty; #value as usize] = unsafe { ::std::mem::MaybeUninit::uninit().assume_init() };
-                            let res = ::std::panic::catch_unwind(
-                                ::std::panic::AssertUnwindSafe(||
-                                    xdr_codec::unpack_array_with(
-                                        input, &mut buf[..], #value as usize, uninit_ptr_setter, uninit_ptr_dropper, None)));
+                            let mut buf: [::std::mem::MaybeUninit<#ty>; #value as usize] = unsafe { ::std::mem::MaybeUninit::uninit().assume_init() };
+                            let res = xdr_codec::unpack_array_with(input, &mut buf[..], #value as usize, uninit_ptr_setter, uninit_ptr_dropper, None);
 
-                            let sz = match res {
-                                Ok(Ok(sz)) => sz,
-                                Ok(Err(err)) => { ::std::mem::forget(buf); return Err(err); }
-                                Err(panic) => { ::std::mem::forget(buf); ::std::panic::resume_unwind(panic);  }
-                            };
-                            (buf, sz)
+                            match res {
+                                Ok(sz) => {
+                                    let buf: [#ty; #value as usize] = unsafe { ::std::mem::transmute(buf) };
+                                    (buf, sz)
+                                }
+                                Err(err) => { return Err(err); }
+                            }
                         })
                     }
                 }
