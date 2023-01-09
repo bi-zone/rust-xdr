@@ -15,8 +15,6 @@ pub type Result<T> = result::Result<T, Error>;
 
 pub use self::xdr_nom::specification;
 
-use super::result_option;
-
 #[cfg(not(feature="derive_strum_enum_string"))]
 bitflags! {
     pub struct Derives: u32 {
@@ -667,7 +665,7 @@ impl Emit for Typespec {
             &Struct(ref decls) => {
                 let decls: Vec<_> = decls
                     .iter()
-                    .filter_map(|decl| result_option(decl.as_token(symtab)))
+                    .filter_map(|decl| decl.as_token(symtab).transpose())
                     .map(|res| res.map(|(field, ty)| quote!(pub #field: #ty,)))
                     .collect::<Result<Vec<_>>>()?;
 
