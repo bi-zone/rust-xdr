@@ -77,8 +77,8 @@ enum bop { a = 2, b = 1 };
                          Defn::typesyn("foo", Type::Int),
                          Defn::typespec("bar", Type::Struct(vec!(Decl::named("a", Type::Int),
                                                                                Decl::named("b", Type::Int)))),
-                         Defn::typespec("bop", Type::Enum(vec!(EnumDefn::new("a", Some(Value::Const(2))),
-                                                                             EnumDefn::new("b", Some(Value::Const(1)))))))));
+                         Defn::typespec("bop", Type::Enum(vec!(EnumDefn::new("a", Some(Value::Const(2)), None),
+                                                                             EnumDefn::new("b", Some(Value::Const(1)), None)))))));
 }
 
 named!(definition<Defn>,
@@ -340,6 +340,14 @@ fn test_ident() {
 named!(blockcomment<()>,
     do_parse!(apply!(ctag, "/*") >> take_until_and_consume!(&b"*/"[..]) >> (())));
 
+named!(blockcomment_value<&[u8]>,
+    do_parse!(
+        apply!(ctag, "/*") >>
+        comment: take_until!("*/") >>
+        tag!("*/") >> (comment)
+    )
+);
+
 // `linecomment`, and `directive` end at eol, but do not consume it
 named!(linecomment<()>,
     do_parse!(
@@ -446,11 +454,21 @@ named!(enum_body< Vec<EnumDefn> >,
     )
 );
 
+named!(spaced_comma0<()>,
+    do_parse!(
+        many0!(whitespace) >>
+        opt!(tag!(",")) >>
+        many0!(whitespace) >>
+        (())
+    )
+);
+
 named!(enum_assign<EnumDefn>,
     do_parse!(
         id: ident >>
         v: opt!(preceded!(eq, value)) >>
-        (EnumDefn::new(id, v))
+        comment: opt!(peek!(preceded!(complete!(spaced_comma0), blockcomment_value))) >>
+        (EnumDefn::new(id, v, comment))
     )
 );
 
@@ -502,9 +520,24 @@ named!(union_default<Decl>,
     )
 );
 
+named!(spaced_semi<()>,
+    do_parse!(
+        many0!(whitespace) >>
+        tag!(";") >>
+        many0!(whitespace) >>
+        (())
+    )
+);
+
 named!(declaration<Decl>,
-    alt!(kw_void => { |_| Decl::Void } |
-        nonvoid_declaration));
+    do_parse!(
+        decl: alt!(kw_void => { |_| Decl::Void } |
+            nonvoid_declaration
+        ) >>
+        comment: opt!(peek!(preceded!(complete!(spaced_semi), blockcomment_value))) >>
+        (decl.with_comment(comment))
+    )
+);
 
 named!(nonvoid_declaration<Decl>,
     alt!(
@@ -635,24 +668,49 @@ fn test_type() {
 fn test_enum() {
     assert_eq!(type_spec(&b"enum { a, b, c } "[..]),
                Done(&b" "[..],
-                    Type::Enum(vec!(EnumDefn::new("a", None),
-                                    EnumDefn::new("b", None),
-                                    EnumDefn::new("c", None)))));
+                    Type::Enum(vec!(EnumDefn::new("a", None, None),
+                                    EnumDefn::new("b", None, None),
+                                    EnumDefn::new("c", None, None)))));
 
     assert_eq!(type_spec(&b"enum { a = 1, b, c } "[..]),
                Done(&b" "[..],
-                    Type::Enum(vec!(EnumDefn::new("a", Some(Value::Const(1))),
-                                    EnumDefn::new("b", None),
-                                    EnumDefn::new("c", None)))));
+                    Type::Enum(vec!(EnumDefn::new("a", Some(Value::Const(1)), None),
+                                    EnumDefn::new("b", None, None),
+                                    EnumDefn::new("c", None, None)))));
 
     assert_eq!(type_spec(&b"enum { a = Bar, b, c } "[..]),
                Done(&b" "[..],
-                    Type::Enum(vec!(EnumDefn::new("a", Some(Value::ident("Bar"))),
-                                    EnumDefn::new("b", None),
-                                    EnumDefn::new("c", None)))));
+                    Type::Enum(vec!(EnumDefn::new("a", Some(Value::ident("Bar")), None),
+                                    EnumDefn::new("b", None, None),
+                                    EnumDefn::new("c", None, None)))));
 
     assert_eq!(type_spec(&b"enum { } "[..]),
                Error(Err::Position(ErrorKind::Alt, &b"enum { } "[..])));
+}
+
+#[test]
+fn test_doc_comments() {
+    assert_eq!(
+        type_spec(&b"enum { a = 1, /* a comment */ b, c /* c comment */} "[..]),
+        Done(&b" "[..],
+            Type::Enum(vec!(
+                EnumDefn::new("a", Some(Value::Const(1)), Some(b"a comment")),
+                EnumDefn::new("b", None, None),
+                EnumDefn::new("c", None, Some(b"c comment")),
+            ))
+        )
+    );
+
+    assert_eq!(
+        type_spec(&b"struct { int a; /* comment a */ int b; int c; /* comment c */} "[..]),
+        Done(&b" "[..],
+            Type::Struct(vec!(
+                Decl::named("a", Type::Int).with_comment(Some(b"comment a")),
+                Decl::named("b", Type::Int),
+                Decl::named("c", Type::Int).with_comment(Some(b"comment c")),
+            ))
+        )
+    );
 }
 
 named!(const_def<Defn>,
@@ -671,7 +729,7 @@ named!(type_def<Defn>,
         do_parse!(kw_typedef >> decl: nonvoid_declaration >> semi >>
             ({
                 match decl.clone() {
-                    Decl::Named(name, ty) => {
+                    Decl::Named(name, ty, ..) => {
                         if ty.is_syn() {
                             Defn::typesyn(name, ty)
                         } else {
@@ -698,7 +756,7 @@ fn test_typedef() {
                Done(&b""[..], Defn::typespec("foo", Type::Flex(Box::new(Type::Int), None))));
 
     assert_eq!(type_def(&b"enum foo { a };"[..]),
-               Done(&b""[..], Defn::typespec("foo", Type::Enum(vec!(EnumDefn::new("a", None))))));
+               Done(&b""[..], Defn::typespec("foo", Type::Enum(vec!(EnumDefn::new("a", None, None))))));
 
     assert_eq!(type_def(&b"struct foo { int a; };"[..]),
                Done(&b""[..], Defn::typespec("foo", Type::Struct(vec!(Decl::named("a", Type::Int))))));

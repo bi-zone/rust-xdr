@@ -13,6 +13,8 @@ use xdr::Error;
 
 pub type Result<T> = result::Result<T, Error>;
 
+pub type Comment = String;
+
 pub use self::xdr_nom::specification;
 
 #[cfg(not(feature="derive_strum_enum_string"))]
@@ -524,11 +526,11 @@ impl Type {
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone)]
-pub struct EnumDefn(pub String, pub Option<Value>);
+pub struct EnumDefn(pub String, pub Option<Value>, pub Option<Comment>);
 
 impl EnumDefn {
-    fn new<S: AsRef<str>>(id: S, val: Option<Value>) -> EnumDefn {
-        EnumDefn(id.as_ref().to_string(), val)
+    fn new<S: AsRef<str>>(id: S, val: Option<Value>, comment: Option<&[u8]>) -> EnumDefn {
+        EnumDefn(id.as_ref().to_string(), val, into_comment(comment))
     }
 }
 
@@ -538,33 +540,52 @@ pub struct UnionCase(Value, Decl);
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone)]
 pub enum Decl {
     Void,
-    Named(String, Type),
+    Named(String, Type, Option<Comment>),
+}
+
+fn into_comment(comment: Option<&[u8]>) -> Option<Comment> {
+    comment.map(|bytes| String::from_utf8_lossy(bytes).trim().to_owned())
+}
+
+fn comment_stream(comment: &Option<Comment>) -> TokenStream {
+    comment.as_ref().map(|comment| quote!(
+        #[doc = #comment]
+        
+    )).unwrap_or_default()
 }
 
 impl Decl {
     fn named<S: AsRef<str>>(id: S, ty: Type) -> Decl {
-        Decl::Named(id.as_ref().to_string(), ty)
+        Decl::Named(id.as_ref().to_string(), ty, None)
+    }
+
+    fn with_comment(mut self, new_comment: Option<&[u8]>) -> Decl {
+        match &mut self {
+            Decl::Named(_id, _ty, comment) => *comment = into_comment(new_comment),
+            _ => {}
+        }
+        self
     }
 
     fn name_as_ident(&self) -> Option<(Ident, &Type)> {
         use self::Decl::*;
         match self {
             &Void => None,
-            &Named(ref name, ref ty) => Some((quote_ident(name), ty)),
+            &Named(ref name, ref ty, ..) => Some((quote_ident(name), ty)),
         }
     }
 
-    fn as_token(&self, symtab: &Symtab) -> Result<Option<(Ident, TokenStream)>> {
+    fn as_token(&self, symtab: &Symtab) -> Result<Option<(Ident, TokenStream, TokenStream)>> {
         use self::Decl::*;
         match self {
             &Void => Ok(None),
-            &Named(ref name, ref ty) => {
+            &Named(ref name, ref ty, ref comment) => {
                 let nametok = quote_ident(name.as_str());
                 let mut tok = ty.as_token(symtab)?;
                 if false && ty.is_boxed(symtab) {
                     tok = quote!(Box<#tok>)
                 };
-                Ok(Some((nametok, tok)))
+                Ok(Some((nametok, tok, comment_stream(comment))))
             }
         }
     }
@@ -573,7 +594,7 @@ impl Decl {
         use self::Decl::*;
         match self {
             &Void => Derives::all(),
-            &Named(_, ref ty) => ty.derivable(symtab, Some(memo)),
+            &Named(_, ref ty, ..) => ty.derivable(symtab, Some(memo)),
         }
     }
 }
@@ -648,14 +669,14 @@ impl Emit for Typespec {
             &Enum(ref edefs) => {
                 let defs: Vec<_> = edefs
                     .iter()
-                    .filter_map(|&EnumDefn(ref field, _)| if let Some((val, Some(_))) =
+                    .filter_map(|&EnumDefn(ref field, _, ref comment)| if let Some((val, Some(_))) =
                         symtab.getconst(field)
                     {
-                        Some((quote_ident(field), val as isize))
+                        Some((quote_ident(field), val as isize, comment_stream(comment)))
                     } else {
                         None
                     })
-                    .map(|(field, val)| quote!(#field = #val,))
+                    .map(|(field, val, comment)| quote!(#comment #field = #val,))
                     .collect();
 
                 let derive = ty.derivable(symtab, None);
@@ -666,7 +687,7 @@ impl Emit for Typespec {
                 let decls: Vec<_> = decls
                     .iter()
                     .filter_map(|decl| decl.as_token(symtab).transpose())
-                    .map(|res| res.map(|(field, ty)| quote!(pub #field: #ty,)))
+                    .map(|res| res.map(|(field, ty, comment)| quote!(#comment pub #field: #ty,)))
                     .collect::<Result<Vec<_>>>()?;
 
                 let derive = ty.derivable(symtab, None);
@@ -687,7 +708,7 @@ impl Emit for Typespec {
                 let compatcase = |case: &Value| {
                     let seltype = match selector {
                         &Void => return false,
-                        &Named(_, ref ty) => ty,
+                        &Named(_, ref ty, ..) => ty,
                     };
 
                     match case {
@@ -735,16 +756,17 @@ impl Emit for Typespec {
 
                         match decl {
                             &Void => Ok(quote!(#label,)),
-                            &Named(ref name, ref ty) => {
+                            &Named(ref name, ref ty, ref comment) => {
                                 let mut tok = ty.as_token(symtab)?;
                                 if false && ty.is_boxed(symtab) {
                                     tok = quote!(Box<#tok>)
                                 };
+                                let comment = comment_stream(comment);
                                 if labelfields {
                                     let name = quote_ident(name);
-                                    Ok(quote!(#label { #name : #tok },))
+                                    Ok(quote!(#comment #label { #name : #tok },))
                                 } else {
-                                    Ok(quote!(#label(#tok),))
+                                    Ok(quote!(#comment #label(#tok),))
                                 }
                             }
                         }
@@ -754,16 +776,17 @@ impl Emit for Typespec {
                 if let &Some(ref def_val) = defl {
                     let def_val = def_val.as_ref();
                     match def_val {
-                        &Named(ref name, ref ty) => {
+                        &Named(ref name, ref ty, ref comment) => {
                             let mut tok = ty.as_token(symtab)?;
                             if ty.is_boxed(symtab) {
                                 tok = quote!(Box<#tok>)
                             };
                             if labelfields {
                                 let name = quote_ident(name);
-                                cases.push(quote!(default { #name: #tok },))
+                                cases.push(quote!(#comment default { #name: #tok },
+                                ))
                             } else {
-                                cases.push(quote!(default(#tok),))
+                                cases.push(quote!(#comment default(#tok),))
                             }
                         }
                         &Void => cases.push(quote!(default,)),
@@ -814,7 +837,7 @@ impl Emitpack for Typespec {
                 let decls: Vec<_> = decl.iter()
                     .filter_map(|d| match d {
                         &Void => None,
-                        &Named(ref name, ref ty) => Some((quote_ident(name), ty)),
+                        &Named(ref name, ref ty, ..) => Some((quote_ident(name), ty)),
                     })
                     .map(|(field, ty)| {
                         let p = ty.packer(quote!(self.#field), symtab).unwrap();
@@ -833,7 +856,7 @@ impl Emitpack for Typespec {
 
                         let ret = match decl {
                             &Void => quote!(&#name::#label => (#disc as i32).pack(out)?,),
-                            &Named(_, ref ty) => {
+                            &Named(_, ref ty, ..) => {
                                 let pack = match ty.packer(quote!(val), symtab) {
                                     Err(_) => return None,
                                     Ok(p) => p,
@@ -854,7 +877,7 @@ impl Emitpack for Typespec {
                                 &#name::default => return Err(xdr_codec::Error::invalidcase(-1)),
                             }
                         }
-                        &Named(_, _) => {
+                        &Named(..) => {
                             quote! {
                                 &#name::default(_) => return Err(xdr_codec::Error::invalidcase(-1)),
                             }
@@ -905,7 +928,7 @@ impl Emitpack for Typespec {
             &Enum(ref defs) => {
                 directive = quote!(#[inline]);
                 let matchdefs: Vec<_> = defs.iter()
-                    .filter_map(|&EnumDefn(ref name, _)| {
+                    .filter_map(|&EnumDefn(ref name, ..)| {
                         let tok = quote_ident(name);
                         if let Some((ref _val, ref scope)) = symtab.getconst(name) {
                             // let val = *val as i32;
@@ -961,7 +984,7 @@ impl Emitpack for Typespec {
                             let ret = match decl {
                                 //&Void => quote!(#disc => #name::#label,),
                                 &Void => quote!(x if x == (#disc as i32) => #self_name::#label,),
-                                &Named(_, ref ty) => {
+                                &Named(_, ref ty, ..) => {
                                     let unpack = ty.unpacker(symtab);
                                     //quote!(#disc => #name::#label({ let (v, fsz) = #unpack; sz += fsz; v }),)
                                     quote!(x if x == (#disc as i32) => #self_name::#label({ let (v, fsz) = #unpack; sz += fsz; v }),)
@@ -975,7 +998,7 @@ impl Emitpack for Typespec {
                     let decl = decl.as_ref();
                     let defl = match decl {
                         &Void => quote!(_ => #self_name::default),
-                        &Named(_, ref ty) => {
+                        &Named(_, ref ty, ..) => {
                             let unpack = ty.unpacker(symtab);
                             quote!(_ => #self_name::default({
                                 let (v, csz) = #unpack;
@@ -993,7 +1016,7 @@ impl Emitpack for Typespec {
 
                 let selunpack = match sel {
                     &Void => panic!("void switch selector?"),
-                    &Named(_, ref ty) => ty.unpacker(symtab),
+                    &Named(_, ref ty, ..) => ty.unpacker(symtab),
                 };
 
                 quote!(match { let (v, dsz): (i32, _) = #selunpack; sz += dsz; v } { #(#matches)* })
@@ -1067,7 +1090,7 @@ impl Symtab {
         let mut prev = -1;
 
         if let &Type::Enum(ref edefn) = ty {
-            for &EnumDefn(ref name, ref maybeval) in edefn {
+            for &EnumDefn(ref name, ref maybeval, ..) in edefn {
                 let v = match maybeval {
                     &None => prev + 1,
                     &Some(ref val) => {
