@@ -544,7 +544,10 @@ pub enum Decl {
 }
 
 fn into_comment(comment: Option<&[u8]>) -> Option<Comment> {
-    comment.map(|bytes| String::from_utf8_lossy(bytes).trim().to_owned())
+    comment.map(|bytes| {
+        let str = String::from_utf8_lossy(bytes);
+        format!(" {}", str.trim())
+    }.to_owned())
 }
 
 fn comment_stream(comment: &Option<Comment>) -> TokenStream {
