@@ -1,0 +1,18 @@
+[package]
+name = "pretty"
+version = "0.1.0"
+authors = ["Jeremy Fitzhardinge <jeremy@goop.org>"]
+build = "build.rs"
+edition = "2018"
+
+[dependencies.xdr-codec]
+path = "../../../xdr-codec"
+
+[build-dependencies.xdrgen]
+path = "../.."
+features = ["pretty"]
+# features = ["derive_serde"]
+
+[dependencies]
+# serde = {version = "1.0", features = ["derive"]}
+# serde_json = "1.0"

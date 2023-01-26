@@ -1,19 +1,15 @@
 [package]
-name = "example"
+name = "simple"
 version = "0.1.0"
 authors = ["Jeremy Fitzhardinge <jeremy@goop.org>"]
 build = "build.rs"
 edition = "2018"
 
-[[bin]]
-name = "simple"
-path = "src/simple.rs"
-
 [dependencies.xdr-codec]
-path = "../../xdr-codec"
+path = "../../../xdr-codec"
 
 [build-dependencies.xdrgen]
-path = ".."
+path = "../.."
 # features = ["derive_serde"]
 
 [dependencies]
