@@ -1,2 +1,2 @@
 [workspace]
-members = [ "xdr-codec", "xdrgen", "xdrgen/example" ]
+members = [ "xdr-codec", "xdrgen", "xdrgen/examples/simple", "xdrgen/examples/pretty" ]
