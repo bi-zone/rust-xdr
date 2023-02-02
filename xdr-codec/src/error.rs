@@ -7,15 +7,15 @@ error_chain! {
     errors {
         InvalidCase(v: i32) {
             description("invalid union case")
-            display("invalid union case: '{}'", v)
+            display("invalid union case: {} (0x{:X})", v, v)
         }
         InvalidEnum(v: i32) {
             description("invalid enum value")
-            display("invalid enum value: '{}'", v)
+            display("invalid enum value: {} (0x{:X})", v, v)
         }
         InvalidLen(v: usize) {
             description("invalid array len")
-            display("invalid array len: '{}'", v)
+            display("invalid array len: {} (0x{:X})", v, v)
         }
     }
 }
