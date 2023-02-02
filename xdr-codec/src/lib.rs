@@ -668,7 +668,7 @@ impl<In: Read> Unpack<In> for bool {
         i32::unpack(input).and_then(|(v, sz)| match v {
             0 => Ok((false, sz)),
             1 => Ok((true, sz)),
-            v => Err(ErrorKind::InvalidEnum(v).into()),
+            v => Err(ErrorKind::InvalidNamedEnum(stringify!(bool), v).into()),
         })
     }
 }

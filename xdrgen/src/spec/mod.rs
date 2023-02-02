@@ -955,7 +955,7 @@ impl Emitpack for Typespec {
                     sz += esz;
                     match e {
                         #(#matchdefs)*
-                        e => return Err(xdr_codec::Error::invalidenum(e))
+                        e => return Err(xdr_codec::Error::invalid_named_enum(stringify!(#self_name), e))
                     }
                 })
             }
@@ -1013,7 +1013,7 @@ impl Emitpack for Typespec {
 
                     matches.push(defl);
                 } else {
-                    let defl = quote!(v => return Err(xdr_codec::Error::invalidcase(v as i32)));
+                    let defl = quote!(v => return Err(xdr_codec::Error::invalid_named_case(stringify!(#self_name), v as i32)));
                     matches.push(defl);
                 }
 
