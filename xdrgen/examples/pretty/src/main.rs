@@ -3,34 +3,32 @@ use xdr_codec;
 use std::io::Cursor;
 use xdr_codec::{unpack,pack};
 
-#[path ="../generated/simple_xdr.rs"]
-mod simple;
+#[path ="../generated/pretty_xdr.rs"]
+mod xdr;
 
 fn main() {
-    let bar = simple::Bar { data: vec![1,2,3] };
-    let foo = simple::Foo {
+    let bar = xdr::Bar { data: vec![1,2,3] };
+    let foo = xdr::Foo {
         a: 1, b: 2, c: 3,
         bar: vec![bar.clone()],
-        bar_pair: simple::BarPair([bar.clone(), bar.clone()]),
+        bar_pair: xdr::BarPair([bar.clone(), bar.clone()]),
         barish: None,
         name: String::from("foox"),
-        thing: simple::Things::C,
+        thing: xdr::Things::C,
         type_: 123,
     };
-    // "derive_serde" feature makes this working
-    // println!("Serialized JSON: {}", serde_json::to_string(&foo).unwrap());
+    let foobar = xdr::Foobar::C(foo);
 
     let mut buf = Vec::new();
 
-    pack(&foo, &mut buf).unwrap();
-    println!("foo={:?}", foo);
+    pack(&foobar, &mut buf).unwrap();
     println!("buf={:?} len={}", buf, buf.len());
 
     let mut cur = Cursor::new(buf);
     
-    let foo2 = unpack(&mut cur).unwrap();
+    let foobar2 = unpack(&mut cur).unwrap();
 
-    println!("foo={:?}", foo);
-    println!("foo2={:?}", foo2);
-    assert_eq!(foo, foo2);
+    println!("foobar={:?}", foobar);
+    println!("foobar2={:?}", foobar2);
+    assert_eq!(foobar, foobar2);
 }

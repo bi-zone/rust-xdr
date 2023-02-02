@@ -14,3 +14,11 @@ struct Foo {
 	Things thing;
 	unsigned type;
 };
+union Foobar switch (Things t) {
+	case A:
+		int a;
+	case B:
+		string b<>;
+	case C:
+		Foo c;
+};

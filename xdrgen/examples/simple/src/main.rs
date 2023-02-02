@@ -6,7 +6,7 @@ use xdr_codec::{unpack,pack};
 mod simple {
     #![allow(dead_code)]
     use xdr_codec;
-    include!(concat!(env!("OUT_DIR"), "/simple_xdr.rs"));
+    include!(concat!(env!("OUT_DIR"), "/example_xdr.rs"));
 }
 
 fn main() {
