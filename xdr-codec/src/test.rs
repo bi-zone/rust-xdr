@@ -156,7 +156,7 @@ fn basic_bool() {
     let bad = vec![0, 0, 0, 2];
     let mut input = Cursor::new(bad);
     match bool::unpack(&mut input) {
-        Err(Error(ErrorKind::InvalidEnum(_), _)) => (),
+        Err(err) if err.is_invalid_enum() => (),
         res => panic!("bad result {:?}", res),
     }
 }
@@ -733,7 +733,7 @@ fn basic_option() {
     let mut input = Cursor::new(bad);
 
     match Option::<u32>::unpack(&mut input) {
-        Err(Error(ErrorKind::InvalidEnum(_), _)) => (),
+        Err(err) if err.is_invalid_enum() => (),
         res => panic!("bad result {:?}", res),
     }
 }
