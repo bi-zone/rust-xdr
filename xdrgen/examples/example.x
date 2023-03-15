@@ -3,6 +3,8 @@ struct Bar {
        opaque data<>;
 };
 typedef Bar BarPair[2];
+
+const VERSION_0 = 0;
 struct Foo {
 	int a; /* comment a */
 	int b;
@@ -14,6 +16,8 @@ struct Foo {
 	Things thing;
 	unsigned type;
 };
+
+const VERSION_1 = 1;
 union Foobar switch (Things t) {
 	case A:
 		int a;

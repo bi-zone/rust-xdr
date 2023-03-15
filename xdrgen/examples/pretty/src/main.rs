@@ -6,6 +6,10 @@ use xdr_codec::{unpack,pack};
 #[path ="../generated/pretty_xdr.rs"]
 mod xdr;
 
+trait Versioned {
+    const VERSION: i64;
+}
+
 fn main() {
     let bar = xdr::Bar { data: vec![1,2,3] };
     let foo = xdr::Foo {
@@ -31,4 +35,7 @@ fn main() {
     println!("foobar={:?}", foobar);
     println!("foobar2={:?}", foobar2);
     assert_eq!(foobar, foobar2);
+
+    assert_eq!(xdr::Foo::VERSION, 0);
+    assert_eq!(xdr::Foobar::VERSION, 1);
 }

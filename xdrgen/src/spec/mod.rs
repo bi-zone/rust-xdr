@@ -108,7 +108,7 @@ lazy_static! {
     };
 }
 
-fn quote_ident<S: AsRef<str>>(id: S) -> Ident {
+pub(crate) fn quote_ident<S: AsRef<str>>(id: S) -> Ident {
     let id = id.as_ref();
 
     if (*KEYWORDS).contains(id) {
