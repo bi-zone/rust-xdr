@@ -133,30 +133,74 @@ where
     Ok(())
 }
 
+#[cfg(feature = "pretty")]
+pub mod pretty {
+    use std::collections::BTreeMap;
+
+    use proc_macro2::{TokenStream, Ident};
+
+    use crate::spec::{Defn, quote_ident};
+
+    #[derive(Default)]
+    pub struct GenerateOptions<'a> {
+        pub header: &'a str,
+        pub exclude_defs: &'a [&'a str],
+        pub tagging: Option<ConstTaggingOptions>,
+    }
+
+    pub struct ConstTaggingOptions {
+        pub const_filter: fn(&str) -> bool,
+        pub quote: fn(&Ident, &Ident) -> proc_macro2::TokenStream,
+    }
+
+    impl ConstTaggingOptions {
+        pub(super) fn tagged_types<'a>(&'a self, input: &'a [Defn], exclude_defs: &[&str]) -> BTreeMap<&str, TokenStream> {
+            let mut result = BTreeMap::new();
+            let mut tag = None;
+            for def in input {
+                match (def, &tag) {
+                    (Defn::Const(name, _), _) if !exclude_defs.contains(&name.as_str()) => if (self.const_filter)(name) {
+                        tag = Some(quote_ident(name));
+                    },
+                    (Defn::Typespec(name, _), Some(tag))  if !exclude_defs.contains(&name.as_str()) => {
+                        result.insert(name.as_str(), (self.quote)(&quote_ident(name), tag));
+                    },
+                    _ => {}
+                }
+            }
+            result
+        }
+    }
+
+    pub(super) fn filter_exlude<'a, V>(exclude_defs: &'a [&str]) -> impl 'a + FnMut(&(&String, V)) -> bool {
+        move |(name, _): &(&String, V),| {
+            !exclude_defs.contains(&name.as_str())
+        }
+    }
+}
+
 /// Generate pretty Rust code from an RFC4506 XDR specification
 ///
 /// `input` is a string with XDR specification
 /// `header` is Rust code to prepend before generated output
 #[cfg(feature = "pretty")]
-pub fn generate_pretty(input: &str, header: &str, exclude_defs: &[&str]) -> Result<String, anyhow::Error> {
+pub fn generate_pretty(input: &str, options: &pretty::GenerateOptions) -> Result<String, anyhow::Error> {
     use proc_macro2::TokenStream;
 
-    let mut file = syn::parse_file(header)?;
+    let mut file = syn::parse_file(options.header)?;
 
-    let xdr = match spec::specification(&input) {
-        Ok(defns) => Symtab::new(&defns),
+    let defns = match spec::specification(&input) {
+        Ok(defns) => defns,
         Err(e) => anyhow::bail!(xdr::Error::from(format!("parse error: {}", e))),
     };
 
-    fn filter_exlude<'a, V>(exclude_defs: &'a [&str]) -> impl 'a + FnMut(&(&String, V)) -> bool {
-        move |(name, _): &(&String, V),| {
-            !exclude_defs.contains(&name.as_str())
-        }
-    }
+    let mut tagged_types = options.tagging.as_ref().map(|tagging| tagging.tagged_types(&defns, options.exclude_defs)).unwrap_or_default();
+
+    let xdr = Symtab::new(&defns);
     
     let consts = xdr
         .constants()
-        .filter(filter_exlude(exclude_defs))
+        .filter(pretty::filter_exlude(options.exclude_defs))
         .filter_map(|(c, &(v, ref scope))| {
             if scope.is_none() {
                 Some(spec::Const(c.clone(), v))
@@ -168,17 +212,22 @@ pub fn generate_pretty(input: &str, header: &str, exclude_defs: &[&str]) -> Resu
 
     let typespecs: Vec<_> = xdr
         .typespecs()
-        .filter(filter_exlude(exclude_defs))
+        .filter(pretty::filter_exlude(options.exclude_defs))
         .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
         .collect();
     
     let typedefines = typespecs
         .iter()
-        .map(|c| c.define(&xdr));
+        .flat_map(|c| {
+            [
+                c.define(&xdr),
+                Ok(tagged_types.remove(c.0.as_str()).unwrap_or_default()),
+            ]
+        });
 
     let typesyns = xdr
         .typesyns()
-        .filter(filter_exlude(exclude_defs))
+        .filter(pretty::filter_exlude(options.exclude_defs))
         .map(|(n, ty)| spec::Typesyn(n.clone(), ty.clone()))
         .map(|c| c.define(&xdr));
 

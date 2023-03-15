@@ -8,6 +8,9 @@ edition = "2018"
 [dependencies.xdr-codec]
 path = "../../../xdr-codec"
 
+[build-dependencies]
+quote = "1"
+
 [build-dependencies.xdrgen]
 path = "../.."
 features = ["pretty"]
