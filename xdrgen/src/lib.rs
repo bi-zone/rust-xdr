@@ -150,6 +150,7 @@ pub mod pretty {
 
     pub struct ConstTaggingOptions {
         pub const_filter: fn(&str) -> bool,
+        pub ty_filter: fn(&str, &str) -> bool,
         pub quote: fn(&Ident, &Ident) -> proc_macro2::TokenStream,
     }
 
@@ -160,10 +161,10 @@ pub mod pretty {
             for def in input {
                 match (def, &tag) {
                     (Defn::Const(name, _), _) if !exclude_defs.contains(&name.as_str()) => if (self.const_filter)(name) {
-                        tag = Some(quote_ident(name));
+                        tag = Some((name.as_str(), quote_ident(name)));
                     },
-                    (Defn::Typespec(name, _), Some(tag))  if !exclude_defs.contains(&name.as_str()) => {
-                        result.insert(name.as_str(), (self.quote)(&quote_ident(name), tag));
+                    (Defn::Typespec(name, _), Some(tag))  if !exclude_defs.contains(&name.as_str()) && (self.ty_filter)(name.as_str(), tag.0) => {
+                        result.insert(name.as_str(), (self.quote)(&quote_ident(name), &tag.1));
                     },
                     _ => {}
                 }

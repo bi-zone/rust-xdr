@@ -12,6 +12,7 @@ fn main() {
     ";
     let tagging = Some(ConstTaggingOptions {
         const_filter: |name| name.starts_with("VERSION_"),
+        ty_filter: |_ty, _tag| true,
         quote: |ty, tag| quote!(
             impl crate::Versioned for #ty {
                 const VERSION: i64 = #tag;
