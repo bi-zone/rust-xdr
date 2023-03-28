@@ -24,5 +24,7 @@ union Foobar switch (Things t) {
 	case B:
 		string b<>;
 	case C:
-		Foo c;
+		Foo c; /* case C */
+	default:
+		int d; /* default */
 };
