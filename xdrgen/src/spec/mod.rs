@@ -787,13 +787,13 @@ impl Emit for Typespec {
                             let comment = comment_stream(comment);
                             if labelfields {
                                 let name = quote_ident(name);
-                                cases.push(quote!(#comment default { #name: #tok },
+                                cases.push(quote!(#comment Default { #name: #tok },
                                 ))
                             } else {
-                                cases.push(quote!(#comment default(#tok),))
+                                cases.push(quote!(#comment Default(#tok),))
                             }
                         }
-                        &Void => cases.push(quote!(default,)),
+                        &Void => cases.push(quote!(Default,)),
                     }
                 }
 
@@ -878,12 +878,12 @@ impl Emitpack for Typespec {
                     let default = match decl {
                         &Void => {
                             quote! {
-                                &#name::default => return Err(xdr_codec::Error::invalidcase(-1)),
+                                &#name::Default => return Err(xdr_codec::Error::invalidcase(-1)),
                             }
                         }
                         &Named(..) => {
                             quote! {
-                                &#name::default(_) => return Err(xdr_codec::Error::invalidcase(-1)),
+                                &#name::Default(_) => return Err(xdr_codec::Error::invalidcase(-1)),
                             }
                         }
                     };
@@ -1001,10 +1001,10 @@ impl Emitpack for Typespec {
                 if let &Some(ref decl) = defl {
                     let decl = decl.as_ref();
                     let defl = match decl {
-                        &Void => quote!(_ => #self_name::default),
+                        &Void => quote!(_ => #self_name::Default),
                         &Named(_, ref ty, ..) => {
                             let unpack = ty.unpacker(symtab);
-                            quote!(_ => #self_name::default({
+                            quote!(_ => #self_name::Default({
                                 let (v, csz) = #unpack;
                                 sz += csz;
                                 v
