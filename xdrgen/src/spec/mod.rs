@@ -784,6 +784,7 @@ impl Emit for Typespec {
                             if ty.is_boxed(symtab) {
                                 tok = quote!(Box<#tok>)
                             };
+                            let comment = comment_stream(comment);
                             if labelfields {
                                 let name = quote_ident(name);
                                 cases.push(quote!(#comment default { #name: #tok },
