@@ -8,7 +8,7 @@ repository = "https://github.com/jsgf/rust-xdr/tree/master/xdrgen"
 documentation = "https://docs.rs/xdrgen/"
 readme = "README.md"
 keywords = ["encoding", "protocol", "xdr", "rfc4506", "serialization"]
-include = [ "src/**/*.rs", "tests/**/*.rs", "*.md", "Cargo.toml"  ]
+include = ["src/**/*.rs", "tests/**/*.rs", "*.md", "Cargo.toml"]
 edition = "2018"
 
 [[bin]]
@@ -23,27 +23,29 @@ default = []
 unstable = []
 derive_serde = ["serde"]
 derive_json_schema = ["schemars"]
-derive_strum_enum_string = ["strum", "strum_macros"]
+derive_strum_enum_string = ["strum"]
 reprc = []
 pretty = ["anyhow", "prettyplease", "syn"]
 
 [dependencies]
-log = "0.3"
-env_logger = "0.4"
-nom = { version="3.1", features=["verbose-errors"] }
+log = "0.4"
+env_logger = "0.9"
+nom = { version = "3.1", features = ["verbose-errors"] }
 quote = "1"
 proc-macro2 = "1"
-clap = "2.24"
+clap = "3"
 lazy_static = "1.4"
 bitflags = "1.2"
-serde = {version = "1.0", features = ["derive"], optional = true}
-schemars = {version = "0.8", optional = true}
-strum = {version = "0.19", optional = true}
-strum_macros = {version = "0.19", optional = true}
+serde = { version = "1.0", features = ["derive"], optional = true }
+schemars = { version = "0.8", optional = true }
+strum = { version = "0.24", optional = true, features = ["derive"] }
 
-anyhow = {version = "1", optional = true}
-prettyplease = { version = "0.1", optional = true}
-syn = { version = "1", default-features = false, features = ["parsing", "printing"], optional = true}
+anyhow = { version = "1", optional = true }
+prettyplease = { version = "0.1", optional = true }
+syn = { version = "1", default-features = false, features = [
+    "parsing",
+    "printing",
+], optional = true }
 
 [dependencies.xdr-codec]
 path = "../xdr-codec"
