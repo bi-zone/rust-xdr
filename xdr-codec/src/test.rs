@@ -2,7 +2,7 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 use std::io::Cursor;
-use super::{Error, ErrorKind, Pack, Unpack, Opaque,
+use super::{Error, Pack, Unpack, Opaque,
             pack_flex, pack_opaque_flex, pack_string, pack_array, pack_opaque_array,
             unpack_array, unpack_opaque_array, unpack_string, unpack_flex, unpack_opaque_flex};
 
@@ -226,7 +226,7 @@ fn basic_string() {
         let mut out = Cursor::new(Vec::new());
 
         match pack_string("foo!", Some(2), &mut out) {
-            Err(Error(ErrorKind::InvalidLen(_), _)) => (),
+            Err(Error::InvalidLen{..}) => (),
             e => panic!("bad result {:?}", e),
         }
     }
@@ -342,7 +342,7 @@ fn basic_flex() {
         let mut out = Cursor::new(Vec::new());
 
         match pack_flex(&vec![0x11u32, 0x22, 0x33, 0x44, 0x55], Some(4), &mut out) {
-            Err(Error(ErrorKind::InvalidLen(_), _)) => (),
+            Err(Error::InvalidLen{..}) => (),
             e => panic!("bad result {:?}", e)
         }
     }
@@ -438,7 +438,7 @@ fn basic_opaque_flex() {
         let mut out = Cursor::new(Vec::new());
 
         match pack_opaque_flex(&vec![0x11u8, 0x22, 0x33, 0x44, 0x55], Some(3), &mut out) {
-            Err(Error(ErrorKind::InvalidLen(_), _)) => (),
+            Err(Error::InvalidLen{..}) => (),
             e => panic!("bad result {:?}", e),
         }
     }
@@ -459,7 +459,7 @@ fn bounded_flex() {
     {
         let mut input = Cursor::new(v.clone());
         match unpack_flex::<_, Vec<u32>>(&mut input, Some(4)) {
-            Result::Err(Error(ErrorKind::InvalidLen(_), _)) => (),
+            Result::Err(Error::InvalidLen{..}) => (),
             e => panic!("Unexpected {:?}", e),
         }
     }
@@ -480,7 +480,7 @@ fn bounded_opaque_flex() {
     {
         let mut input = Cursor::new(v.clone());
         match unpack_opaque_flex(&mut input, Some(4)) {
-            Result::Err(Error(ErrorKind::InvalidLen(_), _)) => (),
+            Result::Err(Error::InvalidLen{..}) => (),
             e => panic!("Unexpected {:?}", e),
         }
     }
@@ -502,7 +502,7 @@ fn bounded_string() {
     {
         let mut input = Cursor::new(v.clone());
         match unpack_string(&mut input, Some(5)) {
-            Result::Err(Error(ErrorKind::InvalidLen(_), _)) => (),
+            Result::Err(Error::InvalidLen{..}) => (),
             e => panic!("Unexpected {:?}", e),
         }
     }

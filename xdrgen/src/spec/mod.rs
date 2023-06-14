@@ -2,16 +2,12 @@ use std::collections::btree_map::{BTreeMap, Iter};
 use std::collections::{HashMap, HashSet};
 use std::io::{Write, stderr};
 
-use std::result;
-
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{self, ToTokens};
 
+use crate::{Result, Error};
+
 mod xdr_nom;
-
-use xdr::Error;
-
-pub type Result<T> = result::Result<T, Error>;
 
 pub type Comment = String;
 
@@ -519,7 +515,7 @@ impl Type {
                 quote!(#id)
             }
 
-            _ => return Err(format!("can't have unnamed type {:?}", self).into()),
+            Enum(..) | Struct(..) | Union(..) => return Err(Error::UnnamedType(self.clone())),
         };
         Ok(ret)
     }
@@ -750,9 +746,7 @@ impl Emit for Typespec {
                     .iter()
                     .map(|&UnionCase(ref val, ref decl)| {
                         if !compatcase(val) {
-                            return Err(Error::from(
-                                format!("incompat selector {:?} case {:?}", selector, val),
-                            ));
+                            return Err(Error::IncompatSelector{selector: selector.clone(), value: val.clone()});
                         }
 
                         let label = val.as_ident();
@@ -878,12 +872,12 @@ impl Emitpack for Typespec {
                     let default = match decl {
                         &Void => {
                             quote! {
-                                &#name::Default => return Err(xdr_codec::Error::invalidcase(-1)),
+                                &#name::Default => return Err(xdr_codec::Error::invalid_case(-1)),
                             }
                         }
                         &Named(..) => {
                             quote! {
-                                &#name::Default(_) => return Err(xdr_codec::Error::invalidcase(-1)),
+                                &#name::Default(_) => return Err(xdr_codec::Error::invalid_case(-1)),
                             }
                         }
                     };
@@ -982,7 +976,7 @@ impl Emitpack for Typespec {
                             let label = val.as_ident();
                             let disc = match val.as_i64(symtab) {
                                 Some(v) => v as i32,
-                                None => return Err(Error::from(format!("discriminant value {:?} unknown", val))),
+                                None => return Err(Error::DiscriminantValueUnknown { value: val.clone() }),
                             };
 
                             let ret = match decl {
@@ -1036,7 +1030,7 @@ impl Emitpack for Typespec {
             &Ident(_, _) => return Ok(None),
 
             _ if ty.is_prim(symtab) => return Ok(None),
-            _ => return Err(Error::from(format!("unimplemented ty={:?}", ty))),
+            _ => return Err(Error::UnimplementedType { ty: ty.clone() }),
         };
 
         Ok(Some(quote! {

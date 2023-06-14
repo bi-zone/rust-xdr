@@ -4,8 +4,7 @@ use nom::IResult::*;
 
 use std::str;
 
-use super::{Decl, Defn, EnumDefn, Type, UnionCase, Value};
-use super::{Derives};
+use super::{Decl, Defn, EnumDefn, Type, UnionCase, Value, Derives, Error, Result};
 
 #[inline]
 fn ignore<T>(_: T) -> () {
@@ -25,19 +24,20 @@ fn eof(input: &[u8]) -> IResult<&[u8], ()> {
     }
 }
 
-pub fn specification(input: &str) -> Result<Vec<Defn>, String> {
-    match spec(input.as_bytes()) {
-        Done(_, spec) => Ok(spec),
+pub fn specification(input: &str) -> Result<Vec<Defn>> {
+    let parse_err = match spec(input.as_bytes()) {
+        Done(_, spec) => return Ok(spec),
         Error(Err::Position(kind, input)) => {
-            Err(format!(
+            format!(
                 "{:?}: {}",
                 kind,
                 String::from(str::from_utf8(input).unwrap())
-            ))
+            )
         }
-        Error(err) => Err(format!("Error: {:?}", err)),
-        Incomplete(need) => Err(format!("Incomplete {:?}", need)),
-    }
+        Error(err) => format!("Error: {:?}", err),
+        Incomplete(need) => format!("Incomplete {:?}", need),
+    };
+    Err(Error::Parse(parse_err))
 }
 
 named!(spec< Vec<Defn> >,

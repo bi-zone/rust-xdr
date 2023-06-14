@@ -1,15 +1,13 @@
 extern crate xdrgen;
 extern crate xdr_codec;
 extern crate tempdir;
-#[macro_use]
-extern crate error_chain;
 
 use std::fs::{File, create_dir_all};
 use std::io::{Cursor, Write};
 use std::process::Command;
 
+use anyhow::{bail, Result};
 use xdrgen::generate;
-use xdr_codec::Result;
 
 fn build_test(name: &str, xdr_spec: &str) -> Result<()> {
     let tempdir = tempdir::TempDir::new("build").expect("Failed to make tempdir");

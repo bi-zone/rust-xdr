@@ -31,10 +31,11 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-type Result<T, E = xdr::Error> = std::result::Result<T, E>;
-
 mod spec;
 use spec::{Emit, Emitpack, Symtab};
+
+mod error;
+pub use self::error::{Result, Error};
 
 pub fn exclude_definition_line(line: &str, exclude_defs: &[&str]) -> bool {
     exclude_defs.iter().fold(false, |acc, v| {
@@ -64,12 +65,8 @@ where
 
     input.read_to_string(&mut source)?;
 
-    let xdr = match spec::specification(&source) {
-        Ok(defns) => Symtab::new(&defns),
-        Err(e) => return Err(xdr::Error::from(format!("parse error: {}", e))),
-    };
-
-    let xdr = xdr;
+    let defns = spec::specification(&source)?;
+    let xdr = Symtab::new(&defns);
 
     let res: Vec<_> = {
         let consts = xdr
@@ -190,10 +187,7 @@ pub fn generate_pretty(input: &str, options: &pretty::GenerateOptions) -> Result
 
     let mut file = syn::parse_file(options.header)?;
 
-    let defns = match spec::specification(&input) {
-        Ok(defns) => defns,
-        Err(e) => anyhow::bail!(xdr::Error::from(format!("parse error: {}", e))),
-    };
+    let defns = spec::specification(&input)?;
 
     let mut tagged_types = options.tagging.as_ref().map(|tagging| tagging.tagged_types(&defns, options.exclude_defs)).unwrap_or_default();
 
