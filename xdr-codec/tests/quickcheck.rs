@@ -5,7 +5,7 @@ use std::io::Cursor;
 use std::fmt::Debug;
 use std::iter;
 
-use xdr_codec::{Error, ErrorKind, Pack, Unpack, pack_array, pack_opaque_array, padding,
+use xdr_codec::{Error, Pack, Unpack, pack_array, pack_opaque_array, padding,
                 unpack_array, unpack_opaque_array};
 use quickcheck::{Arbitrary, quickcheck};
 
@@ -51,7 +51,7 @@ where
 
     let mut data = Cursor::new(data);
     match T::unpack(&mut data) {
-        Err(Error(ErrorKind::IOError(_), _)) => true,
+        Err(Error::IOError{..}) => true,
         _ => false,
     }
 }
@@ -152,7 +152,7 @@ fn check_array(arraysz: usize, rxsize: usize, data: Vec<u32>, defl: Option<u32>)
     // pack data we have into the array
     let tsz = match pack_array(&data[..], arraysz, &mut buf, defl.as_ref()) {
         Ok(tsz) if data.len() >= arraysz || defl.is_some() => tsz,
-        e @ Err(Error(ErrorKind::InvalidLen(_), _)) => {
+        e @ Err(Error::InvalidLen{..}) => {
             let pass = defl.is_none() && data.len() < arraysz;
             if !pass {
                 println!(
@@ -202,7 +202,7 @@ fn check_array(arraysz: usize, rxsize: usize, data: Vec<u32>, defl: Option<u32>)
     // unpack rxsize elements
     let rsz = match unpack_array(&mut cur, &mut recv[..], arraysz, defl.as_ref()) {
         Ok(rsz) if recv.len() <= arraysz || defl.is_some() => rsz,                  // normal success
-        Err(Error(ErrorKind::InvalidLen(_), _)) => return defl.is_none() && recv.len() > arraysz,    // expected if recv is too big and there's no default
+        Err(Error::InvalidLen{..}) => return defl.is_none() && recv.len() > arraysz,    // expected if recv is too big and there's no default
         Err(e) => {
             println!("unpack_array failed {:?}", e);
             return false;

@@ -20,8 +20,6 @@
 #![crate_type = "lib"]
 
 extern crate byteorder;
-#[macro_use]
-extern crate error_chain;
 
 pub use std::io::{Read, Write};
 use std::ops::Deref;
@@ -32,7 +30,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 pub mod record;
 
 mod error;
-pub use error::*;
+pub use error::{Error, Result};
 
 #[cfg(test)]
 mod test;
@@ -110,7 +108,7 @@ where
                 vsz += defl.pack(out)?;
             }
         } else {
-            bail!(ErrorKind::InvalidLen(sz));
+            return Err(Error::invalid_len(sz));
         }
     }
     Ok(vsz)
@@ -136,6 +134,13 @@ pub fn pack_opaque_array<Out: Write>(val: &[u8], sz: usize, out: &mut Out) -> Re
     Ok(vsz)
 }
 
+fn check_maxsz(maxsz: impl Into<Option<usize>>, val: usize) -> Result<()> {
+    match maxsz.into() {
+        Some(maxsz) if val > maxsz => Err(Error::invalid_len(maxsz)),
+        _ => Ok(())
+    }
+}
+
 /// Pack a dynamically sized array, with size limit check.
 ///
 /// This packs an array of packable objects, and also applies an optional size limit.
@@ -145,10 +150,7 @@ pub fn pack_flex<Out: Write, T: Pack<Out>>(
     maxsz: Option<usize>,
     out: &mut Out,
 ) -> Result<usize> {
-    if maxsz.map_or(false, |m| val.len() > m) {
-        bail!(ErrorKind::InvalidLen(maxsz.unwrap()));
-    }
-
+    check_maxsz(maxsz, val.len())?;
     val.pack(out)
 }
 
@@ -161,10 +163,7 @@ pub fn pack_opaque_flex<Out: Write>(
     maxsz: Option<usize>,
     out: &mut Out,
 ) -> Result<usize> {
-    if maxsz.map_or(false, |m| val.len() > m) {
-        bail!(ErrorKind::InvalidLen(maxsz.unwrap()));
-    }
-
+    check_maxsz(maxsz, val.len())?;
     Opaque::borrowed(val).pack(out)
 }
 
@@ -245,7 +244,7 @@ where
                 set(elem, defl.clone());
             }
         } else {
-            bail!(ErrorKind::InvalidLen(arraysz));
+            return Err(Error::invalid_len(arraysz));
         }
     }
 
@@ -307,9 +306,8 @@ pub fn unpack_flex<In: Read, T: Unpack<In>>(
 ) -> Result<(Vec<T>, usize)> {
     let (elems, mut sz) = Unpack::unpack(input)?;
 
-    if maxsz.map_or(false, |m| elems > m) {
-        bail!(ErrorKind::InvalidLen(maxsz.unwrap()));
-    }
+    check_maxsz(maxsz, elems)?;
+
     // TODO_THINK_ABOUT: One can cause allocation maximum exceeding in case
     // of XDR protocol missmatch (different XDR-files or invalid input data).
     // let mut out = Vec::with_capacity(elems);
@@ -339,9 +337,8 @@ pub fn unpack_opaque_flex<In: Read>(
 ) -> Result<(Vec<u8>, usize)> {
     let (elems, mut sz): (usize, _) = Unpack::unpack(input)?;
 
-    if maxsz.map_or(false, |m| elems > m) {
-        bail!(ErrorKind::InvalidLen(maxsz.unwrap()));
-    }
+    check_maxsz(maxsz, elems)?;
+
     // TODO_THINK_ABOUT: same as unpack_flex
     // let mut out = Vec::with_capacity(elems);
     let mut out = vec![];
@@ -495,9 +492,7 @@ impl<Out: Write, T: Pack<Out>> Pack<Out> for [T] {
 impl<Out: Write, T: Pack<Out>> Pack<Out> for Vec<T> {
     #[inline]
     fn pack(&self, out: &mut Out) -> Result<usize> {
-        if self.len() > u32::max_value() as usize {
-            return Err(ErrorKind::InvalidLen(self.len()).into());
-        }
+        check_maxsz(u32::max_value() as usize, self.len())?;
 
         (&self[..]).pack(out)
     }
@@ -508,9 +503,7 @@ impl<'a, Out: Write> Pack<Out> for Opaque<'a> {
         let mut sz;
         let data: &[u8] = self.0.borrow();
 
-        if data.len() > u32::max_value() as usize {
-            return Err(ErrorKind::InvalidLen(data.len()).into());
-        }
+        check_maxsz(u32::max_value() as usize, data.len())?;
 
         sz = data.len().pack(out)?;
 
@@ -668,7 +661,7 @@ impl<In: Read> Unpack<In> for bool {
         i32::unpack(input).and_then(|(v, sz)| match v {
             0 => Ok((false, sz)),
             1 => Ok((true, sz)),
-            v => Err(ErrorKind::InvalidNamedEnum(stringify!(bool), v).into()),
+            v => Err(Error::invalid_named_enum(stringify!(bool), v)),
         })
     }
 }
