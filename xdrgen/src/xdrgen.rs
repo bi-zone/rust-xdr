@@ -8,22 +8,22 @@ use std::fs::File;
 use std::io::{BufReader, Write};
 use std::io::{stderr, stdin, stdout};
 
-use clap::App;
+use clap::{Command, arg};
 
 use xdrgen::generate;
 
 fn main() {
     let _ = env_logger::init();
 
-    let matches = App::new("XDR code generator")
+    let matches = Command::new("XDR code generator")
         .version(env!("CARGO_PKG_VERSION"))
-        .arg_from_usage("[FILE] 'Set .x file'")
+        .arg(arg!(<FILE> "Set .x file"))
         .get_matches();
 
     let output = stdout();
     let mut err = stderr();
 
-    let res = if let Some(fname) = matches.value_of("FILE") {
+    let res = if let Some(fname) = matches.get_one::<String>("FILE") {
         let f = match File::open(fname) {
             Ok(f) => f,
             Err(e) => {
