@@ -32,7 +32,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 mod spec;
-use spec::{Emit, Emitpack, Symtab};
+use spec::{Emit, Emitpack, Symtab, SymDef};
 
 mod error;
 pub use self::error::{Result, Error};
@@ -66,11 +66,13 @@ where
     input.read_to_string(&mut source)?;
 
     let defns = spec::specification(&source)?;
-    let xdr = Symtab::new(&defns);
+    let mut xdr = Symtab::new();
+    xdr.update_consts(&defns, &());
 
     let res: Vec<_> = {
         let consts = xdr
             .constants()
+            .map(SymDef::map_value)
             .filter_map(|(c, &(v, ref scope))| {
                 if scope.is_none() {
                     Some(spec::Const(c.clone(), v))
@@ -82,21 +84,25 @@ where
 
         let typespecs = xdr
             .typespecs()
+            .map(SymDef::map_value)
             .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
             .map(|c| c.define(&xdr));
 
         let typesyns = xdr
             .typesyns()
+            .map(SymDef::map_value)
             .map(|(n, ty)| spec::Typesyn(n.clone(), ty.clone()))
             .map(|c| c.define(&xdr));
 
         let packers = xdr
             .typespecs()
+            .map(SymDef::map_value)
             .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
             .filter_map(|c| c.pack(&xdr).transpose());
 
         let unpackers = xdr
             .typespecs()
+            .map(SymDef::map_value)
             .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
             .filter_map(|c| c.unpack(&xdr).transpose());
 
@@ -136,15 +142,17 @@ pub mod pretty {
 
     use proc_macro2::{TokenStream, Ident};
 
-    use crate::spec::{Defn, quote_ident};
+    use crate::spec::{Defn, quote_ident, SymDef};
 
     #[derive(Default)]
     pub struct GenerateOptions<'a> {
-        pub header: &'a str,
+        pub rust_header: &'a str,
         pub exclude_defs: &'a [&'a str],
         pub tagging: Option<ConstTaggingOptions>,
+        pub xdr_header: &'a str,
     }
 
+    #[derive(Clone)]
     pub struct ConstTaggingOptions {
         pub const_filter: fn(&str) -> bool,
         pub ty_filter: fn(&str, &str) -> bool,
@@ -175,6 +183,15 @@ pub mod pretty {
             !exclude_defs.contains(&name.as_str())
         }
     }
+
+    #[derive(Clone)]
+    pub(super) struct Meta {
+        pub(super) header: bool,
+    }
+
+    pub(super) fn filter_header_out<V>((_, def): &(&String, &SymDef<V, Meta>)) -> bool {
+        !def.meta.header
+    }
 }
 
 /// Generate pretty Rust code from an RFC4506 XDR specification
@@ -183,18 +200,29 @@ pub mod pretty {
 /// `header` is Rust code to prepend before generated output
 #[cfg(feature = "pretty")]
 pub fn generate_pretty(input: &str, options: &pretty::GenerateOptions) -> Result<String, anyhow::Error> {
+    use anyhow::Context;
     use proc_macro2::TokenStream;
 
-    let mut file = syn::parse_file(options.header)?;
+    let mut file = syn::parse_file(options.rust_header)?;
 
-    let defns = spec::specification(&input)?;
+    let xdr_header_defns = if options.xdr_header.is_empty() {
+        vec![]
+    } else {
+        spec::specification(options.xdr_header).context("parse XDR header")?
+    };
+    let defns = spec::specification(&input).context("parse main XDR input")?;
 
     let mut tagged_types = options.tagging.as_ref().map(|tagging| tagging.tagged_types(&defns, options.exclude_defs)).unwrap_or_default();
 
-    let xdr = Symtab::new(&defns);
+    let mut xdr = Symtab::new();
     
+    xdr.update_consts(&xdr_header_defns, &pretty::Meta{ header: true });
+    xdr.update_consts(&defns, &pretty::Meta{ header: false });
+
     let consts = xdr
         .constants()
+        .filter(pretty::filter_header_out)
+        .map(SymDef::map_value)
         .filter(pretty::filter_exlude(options.exclude_defs))
         .filter_map(|(c, &(v, ref scope))| {
             if scope.is_none() {
@@ -207,6 +235,8 @@ pub fn generate_pretty(input: &str, options: &pretty::GenerateOptions) -> Result
 
     let typespecs: Vec<_> = xdr
         .typespecs()
+        .filter(pretty::filter_header_out)
+        .map(SymDef::map_value)
         .filter(pretty::filter_exlude(options.exclude_defs))
         .map(|(n, ty)| spec::Typespec(n.clone(), ty.clone()))
         .collect();
@@ -222,6 +252,8 @@ pub fn generate_pretty(input: &str, options: &pretty::GenerateOptions) -> Result
 
     let typesyns = xdr
         .typesyns()
+        .filter(pretty::filter_header_out)
+        .map(SymDef::map_value)
         .filter(pretty::filter_exlude(options.exclude_defs))
         .map(|(n, ty)| spec::Typesyn(n.clone(), ty.clone()))
         .map(|c| c.define(&xdr));

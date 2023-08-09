@@ -138,11 +138,11 @@ impl Value {
         }
     }
 
-    fn as_i64(&self, symtab: &Symtab) -> Option<i64> {
+    fn as_i64<M>(&self, symtab: &Symtab<M>) -> Option<i64> {
         symtab.value(self)
     }
 
-    fn as_token(&self, symtab: &Symtab) -> TokenStream {
+    fn as_token<M>(&self, symtab: &Symtab<M>) -> TokenStream {
         match self {
             &Value::Const(c) => quote!(#c),
             &Value::Ident(ref id) => {
@@ -211,7 +211,7 @@ impl Type {
         Type::Ident(id.as_ref().to_string(), Some(derives))
     }
 
-    fn is_boxed(&self, symtab: &Symtab) -> bool {
+    fn is_boxed<M>(&self, symtab: &Symtab<M>) -> bool {
         use self::Type::*;
 
         match self {
@@ -228,7 +228,7 @@ impl Type {
         }
     }
 
-    fn is_prim(&self, symtab: &Symtab) -> bool {
+    fn is_prim<M>(&self, symtab: &Symtab<M>) -> bool {
         use self::Type::*;
 
         match self {
@@ -245,7 +245,7 @@ impl Type {
         }
     }
 
-    fn derivable(&self, symtab: &Symtab, memo: Option<&mut HashMap<Type, Derives>>) -> Derives {
+    fn derivable<M>(&self, symtab: &Symtab<M>, memo: Option<&mut HashMap<Type, Derives>>) -> Derives {
         use self::Type::*;
         let mut memoset = HashMap::new();
 
@@ -326,7 +326,7 @@ impl Type {
     }
 
 
-    fn packer(&self, val: TokenStream, symtab: &Symtab) -> Result<TokenStream> {
+    fn packer<M>(&self, val: TokenStream, symtab: &Symtab<M>) -> Result<TokenStream> {
         use self::Type::*;
 
         let res = match self {
@@ -375,7 +375,7 @@ impl Type {
         }
     }
 
-    fn unpacker(&self, symtab: &Symtab) -> TokenStream {
+    fn unpacker<M>(&self, symtab: &Symtab<M>) -> TokenStream {
         use self::Type::*;
 
         match self {
@@ -457,7 +457,7 @@ impl Type {
         }
     }
 
-    fn as_token(&self, symtab: &Symtab) -> Result<TokenStream> {
+    fn as_token<M>(&self, symtab: &Symtab<M>) -> Result<TokenStream> {
         use self::Type::*;
 
         let ret = match self {
@@ -574,7 +574,7 @@ impl Decl {
         }
     }
 
-    fn as_token(&self, symtab: &Symtab) -> Result<Option<(Ident, TokenStream, TokenStream)>> {
+    fn as_token<M>(&self, symtab: &Symtab<M>) -> Result<Option<(Ident, TokenStream, TokenStream)>> {
         use self::Decl::*;
         match self {
             &Void => Ok(None),
@@ -589,7 +589,7 @@ impl Decl {
         }
     }
 
-    fn derivable(&self, symtab: &Symtab, memo: &mut HashMap<Type, Derives>) -> Derives {
+    fn derivable<M>(&self, symtab: &Symtab<M>, memo: &mut HashMap<Type, Derives>) -> Derives {
         use self::Decl::*;
         match self {
             &Void => Derives::all(),
@@ -631,16 +631,16 @@ impl Defn {
 }
 
 pub trait Emit {
-    fn define(&self, symtab: &Symtab) -> Result<TokenStream>;
+    fn define<M>(&self, symtab: &Symtab<M>) -> Result<TokenStream>;
 }
 
 pub trait Emitpack: Emit {
-    fn pack(&self, symtab: &Symtab) -> Result<Option<TokenStream>>;
-    fn unpack(&self, symtab: &Symtab) -> Result<Option<TokenStream>>;
+    fn pack<M>(&self, symtab: &Symtab<M>) -> Result<Option<TokenStream>>;
+    fn unpack<M>(&self, symtab: &Symtab<M>) -> Result<Option<TokenStream>>;
 }
 
 impl Emit for Const {
-    fn define(&self, _: &Symtab) -> Result<TokenStream> {
+    fn define<M>(&self, _: &Symtab<M>) -> Result<TokenStream> {
         let name = quote_ident(&self.0);
         let val = &self.1;
 
@@ -649,7 +649,7 @@ impl Emit for Const {
 }
 
 impl Emit for Typesyn {
-    fn define(&self, symtab: &Symtab) -> Result<TokenStream> {
+    fn define<M>(&self, symtab: &Symtab<M>) -> Result<TokenStream> {
         let ty = &self.1;
         let name = quote_ident(&self.0);
         let tok = ty.as_token(symtab)?;
@@ -658,7 +658,7 @@ impl Emit for Typesyn {
 }
 
 impl Emit for Typespec {
-    fn define(&self, symtab: &Symtab) -> Result<TokenStream> {
+    fn define<M>(&self, symtab: &Symtab<M>) -> Result<TokenStream> {
         use self::Type::*;
 
         let name = quote_ident(&self.0);
@@ -817,7 +817,7 @@ impl Emit for Typespec {
 }
 
 impl Emitpack for Typespec {
-    fn pack(&self, symtab: &Symtab) -> Result<Option<TokenStream>> {
+    fn pack<M>(&self, symtab: &Symtab<M>) -> Result<Option<TokenStream>> {
         use self::Type::*;
         use self::Decl::*;
 
@@ -914,7 +914,7 @@ impl Emitpack for Typespec {
         }))
     }
 
-    fn unpack(&self, symtab: &Symtab) -> Result<Option<TokenStream>> {
+    fn unpack<M>(&self, symtab: &Symtab<M>) -> Result<Option<TokenStream>> {
         use self::Type::*;
         use self::Decl::*;
 
@@ -1047,43 +1047,50 @@ impl Emitpack for Typespec {
 }
 
 #[derive(Debug, Clone)]
-pub struct Symtab {
-    consts: BTreeMap<String, (i64, Option<String>)>,
-    typespecs: BTreeMap<String, Type>,
-    typesyns: BTreeMap<String, Type>,
+pub struct Symtab<M> {
+    consts: BTreeMap<String, SymDef<(i64, Option<String>), M>>,
+    typespecs: BTreeMap<String, SymDef<Type, M>>,
+    typesyns: BTreeMap<String, SymDef<Type, M>>,
 }
 
-impl Symtab {
-    pub fn new(defns: &Vec<Defn>) -> Symtab {
-        let mut ret = Symtab {
+#[derive(Debug, Clone)]
+pub struct SymDef<V, M> {
+    pub value: V,
+    pub meta: M,
+}
+impl<V, M> SymDef<V, M> {
+    pub fn map_value<K>((key, this): (K, &Self)) -> (K, &V) {
+        (key, &this.value)
+    }
+}
+
+impl<M> Symtab<M> {
+    pub fn new() -> Self {
+        Symtab {
             consts: BTreeMap::new(),
             typespecs: BTreeMap::new(),
             typesyns: BTreeMap::new(),
-        };
-
-        ret.update_consts(&defns);
-
-        ret
+        }
     }
 
-    fn update_consts(&mut self, defns: &Vec<Defn>) {
+    pub fn update_consts<'a>(&mut self, defns: impl IntoIterator<Item = &'a Defn>, meta: &M) where M: Clone {
         for defn in defns {
             match defn {
                 &Defn::Typespec(ref name, ref ty) => {
-                    self.deftype(name, ty);
-                    self.update_enum_consts(name, ty);
+                    self.deftype(name, ty, meta.clone());
+                    self.update_enum_consts(name, ty, meta);
                 }
 
-                &Defn::Const(ref name, val) => self.defconst(name, val, None),
+                &Defn::Const(ref name, val) => self.defconst(name, val, None, meta.clone()),
 
                 &Defn::Typesyn(ref name, ref ty) => {
-                    self.deftypesyn(name, ty);
+                    self.deftypesyn(name, ty, meta.clone());
                 }
             }
         }
     }
 
-    fn update_enum_consts(&mut self, scope: &String, ty: &Type) {
+    fn update_enum_consts(&mut self, scope: &String, ty: &Type, meta: &M) where M: Clone {
         let mut err = stderr();
         let mut prev = -1;
 
@@ -1105,27 +1112,27 @@ impl Symtab {
                 prev = v;
 
                 // println!("enum {} -> {}", name, v);
-                self.defconst(name, v, Some(scope.clone()));
+                self.defconst(name, v, Some(scope.clone()), meta.clone());
             }
         }
     }
 
-    fn defconst<S: AsRef<str>>(&mut self, name: S, val: i64, scope: Option<String>) {
-        self.consts.insert(From::from(name.as_ref()), (val, scope));
+    fn defconst<S: AsRef<str>>(&mut self, name: S, val: i64, scope: Option<String>, meta: M) {
+        self.consts.insert(From::from(name.as_ref()), SymDef{ value: (val, scope), meta});
     }
 
-    fn deftype<S: AsRef<str>>(&mut self, name: S, ty: &Type) {
-        self.typespecs.insert(From::from(name.as_ref()), ty.clone());
+    fn deftype<S: AsRef<str>>(&mut self, name: S, ty: &Type, meta: M) {
+        self.typespecs.insert(From::from(name.as_ref()), SymDef{ value: ty.clone(), meta});
     }
 
-    pub fn deftypesyn<S: AsRef<str>>(&mut self, name: S, ty: &Type) {
-        self.typesyns.insert(From::from(name.as_ref()), ty.clone());
+    pub fn deftypesyn<S: AsRef<str>>(&mut self, name: S, ty: &Type, meta: M) {
+        self.typesyns.insert(From::from(name.as_ref()), SymDef{ value: ty.clone(), meta});
     }
 
     pub fn getconst(&self, name: &String) -> Option<(i64, Option<String>)> {
         match self.consts.get(name) {
             None => None,
-            Some(c) => Some(c.clone()),
+            Some(c) => Some(c.value.clone()),
         }
     }
 
@@ -1141,22 +1148,22 @@ impl Symtab {
             None => {
                 match self.typesyns.get(name) {
                     None => None,
-                    Some(ty) => Some(ty),
+                    Some(ty) => Some(&ty.value),
                 }
             }
-            Some(ty) => Some(ty),
+            Some(ty) => Some(&ty.value),
         }
     }
 
-    pub fn constants(&self) -> Iter<String, (i64, Option<String>)> {
+    pub fn constants(&self) -> Iter<String, SymDef<(i64, Option<String>), M>> {
         self.consts.iter()
     }
 
-    pub fn typespecs(&self) -> Iter<String, Type> {
+    pub fn typespecs(&self) -> Iter<String, SymDef<Type, M>> {
         self.typespecs.iter()
     }
 
-    pub fn typesyns(&self) -> Iter<String, Type> {
+    pub fn typesyns(&self) -> Iter<String, SymDef<Type, M>> {
         self.typesyns.iter()
     }
 }

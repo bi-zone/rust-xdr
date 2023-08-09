@@ -15,6 +15,7 @@ struct Foo {
 	string name<>;
 	Things thing;
 	unsigned type;
+	FromHeader from_header;
 };
 
 const VERSION_1 = 1;

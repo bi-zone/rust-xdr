@@ -6,7 +6,7 @@ use xdr_codec::{unpack,pack};
 mod simple {
     #![allow(dead_code)]
     use xdr_codec;
-    include!(concat!(env!("OUT_DIR"), "/example_xdr.rs"));
+    include!(concat!(env!("OUT_DIR"), "/simple_xdr.rs"));
 }
 
 fn main() {
@@ -19,6 +19,7 @@ fn main() {
         name: String::from("foox"),
         thing: simple::Things::C,
         type_: 123,
+        from_header: 0,
     };
     // "derive_serde" feature makes this working
     // println!("Serialized JSON: {}", serde_json::to_string(&foo).unwrap());

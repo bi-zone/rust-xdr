@@ -20,6 +20,7 @@ fn main() {
         name: String::from("foox"),
         thing: xdr::Things::C,
         type_: 123,
+        from_header: 0,
     };
     let foobar = xdr::Foobar::C(foo);
 
